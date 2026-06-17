@@ -1,0 +1,14 @@
+# Database dumps
+Dump*/
+
+# User uploads
+uploads/
+
+# Composer dependencies (optional)
+vendor/
+
+# Logs
+*.log
+
+# Environment files
+.env

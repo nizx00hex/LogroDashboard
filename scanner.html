@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>QR Scanner – Attendance</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 16px;
+        }
+        .scanner-box {
+            background: white;
+            border-radius: 24px;
+            padding: 20px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 35px rgba(0,0,0,0.3);
+        }
+        h2 { color: #1a1a2e; margin-bottom: 8px; }
+        p { color: #555; margin-bottom: 20px; }
+        #qr-reader { width: 100%; margin: 0 auto; border-radius: 16px; overflow: hidden; }
+        #result { margin-top: 20px; padding: 12px; border-radius: 12px; background: #f0f2f5; font-size: 14px; }
+        button {
+            margin-top: 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover { background: #5a67d8; }
+    </style>
+</head>
+<body>
+<div class="scanner-box">
+    <h2>📸 Staff Attendance Scanner</h2>
+    <p>Place your QR code in front of the camera</p>
+    <div id="qr-reader"></div>
+    <div id="result">Waiting for scan...</div>
+    <button id="restartBtn">⟳ Restart Camera</button>
+</div>
+
+<!-- Local copy of the library -->
+<script src="assets/js/html5-qrcode.min.js"></script>
+<script>
+    let html5QrCode = null;
+    let isScanning = false;
+
+    function startScanner() {
+        if (html5QrCode && isScanning) {
+            html5QrCode.stop().then(() => startNewScanner()).catch(err => console.warn(err));
+        } else {
+            startNewScanner();
+        }
+    }
+
+    function startNewScanner() {
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerHTML = '📷 Starting camera...';
+        
+        html5QrCode = new Html5Qrcode("qr-reader");
+        const config = { fps: 10, qrbox: { width: 280, height: 280 } };
+        
+        html5QrCode.start(
+            { facingMode: "environment" },
+            config,
+            (decodedText) => {
+                if (isScanning) {
+                    isScanning = false;
+                    html5QrCode.stop().then(() => {
+                        window.location.href = decodedText;
+                    }).catch(() => {
+                        window.location.href = decodedText;
+                    });
+                }
+            },
+            (errorMessage) => { /* ignore scan errors */ }
+        ).then(() => {
+            isScanning = true;
+            resultDiv.innerHTML = '✅ Camera ready. Scan your QR code.';
+        }).catch(err => {
+            console.error(err);
+            resultDiv.innerHTML = '❌ Cannot access camera. Use HTTPS or localhost, and allow permission.';
+        });
+    }
+
+    document.getElementById('restartBtn').addEventListener('click', startScanner);
+    startScanner();
+</script>
+</body>
+</html>
