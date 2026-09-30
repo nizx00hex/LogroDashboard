@@ -4,6 +4,7 @@ require_once '../classes/Database.php';
 require_once '../classes/Admin.php';
 require_once '../classes/Staff.php';
 require_once '../classes/Attendance.php';
+require_once '../classes/Salary.php';
 require_once '../classes/Branch.php';
 
 $admin = new Admin();
@@ -14,6 +15,7 @@ if (!$admin->isLoggedIn()) {
 
 $staffObj = new Staff();
 $attendanceObj = new Attendance();
+$salaryObj = new Salary();
 $branchObj = new Branch();
 
 $allBranches = $branchObj->getAllBranches();
@@ -22,7 +24,29 @@ $todayAttendance = $attendanceObj->getTodayAttendance();
 
 $selectedBranchId = isset($_GET['branch']) ? $_GET['branch'] : 'all';
 
-// Build branch lookup map for client-side JS
+$totalStaff = count($allStaff);
+$activeCount = 0;
+$pausedCount = 0;
+$totalSalaryBudget = 0;
+$totalAdvancesGiven = 0;
+
+$currentMonth = date('m');
+$currentYear = date('Y');
+$staffPayroll = [];
+
+foreach ($allStaff as $s) {
+    if ($s['status'] === 'paused') {
+        $pausedCount++;
+    } else {
+        $activeCount++;
+    }
+    $pay = $salaryObj->calculateStaffPayroll($s['id'], $currentMonth, $currentYear);
+    $staffPayroll[$s['id']] = $pay;
+    $totalSalaryBudget += ($pay['base_salary'] ?? 0);
+    $totalAdvancesGiven += ($pay['advance_amount'] ?? 0);
+}
+
+// Branch map for JavaScript
 $branchesMap = [
     'all' => [
         'id'                => 'all',
@@ -47,89 +71,16 @@ foreach ($allBranches as $b) {
         'total_staff'       => (int)($b['total_staff'] ?? 0)
     ];
 }
-
-// Calculate initial KPI summary metrics
-$totalStaff = count($allStaff);
-$presentCount = 0;
-$halfDayCount = 0;
-$absentCount = 0;
-$pausedCount = 0;
-
-foreach ($allStaff as $staff) {
-    if ($staff['status'] === 'paused') {
-        $pausedCount++;
-    } else {
-        $today = $todayAttendance[$staff['id']] ?? null;
-        if ($today) {
-            if ($today['status'] === 'full_day') {
-                $presentCount++;
-            } elseif ($today['status'] === 'half_day') {
-                $halfDayCount++;
-            }
-        } else {
-            $absentCount++;
-        }
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Attendance Management System</title>
+    <title>Staff Directory – LOGRO AMS</title>
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-        <style>
 
-        /* Floating Watermark Badge */
-        .app-watermark {
-            position: fixed;
-            bottom: 16px;
-            right: 20px;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: var(--watermark-bg);
-            backdrop-filter: blur(8px);
-            border: 1px solid var(--border);
-            padding: 6px 14px;
-            border-radius: 999px;
-            box-shadow: var(--shadow);
-            font-size: 0.78rem;
-            color: var(--text-muted);
-            user-select: none;
-            z-index: 100;
-        }
-
-        .app-watermark:hover {
-            border-color: var(--primary);
-            transform: translateY(-1px);
-        }
-
-        .app-watermark strong {
-            font-weight: 700;
-        }
-
-        .app-watermark .dot {
-            width: 6px;
-            height: 6px;
-            background-color: #22c55e;
-            border-radius: 50%;
-            display: inline-block;
-        }
-
-        .app-watermark a {
-            color: var(--primary);
-            text-decoration: none;
-            font-weight: 700;
-        }
-
-        .app-watermark a:hover {
-            color: var(--primary-hover);
-            text-decoration: underline;
-        }
-    </style>
 </head>
 <body>
     <!-- Top Modern Navigation Bar -->
@@ -144,8 +95,8 @@ foreach ($allStaff as $staff) {
 
             <nav>
                 <ul class="nav-links">
-                    <li><a href="dashboard.php" class="nav-link active"><i class="fa-solid fa-chart-pie"></i> Dashboard</a></li>
-                    <li><a href="staffs.php" class="nav-link"><i class="fa-solid fa-users"></i> Staffs</a></li>
+                    <li><a href="dashboard.php" class="nav-link"><i class="fa-solid fa-chart-pie"></i> Dashboard</a></li>
+                    <li><a href="staffs.php" class="nav-link active"><i class="fa-solid fa-users"></i> Staffs</a></li>
                     <li><a href="qrcodes.php" class="nav-link"><i class="fa-solid fa-qrcode"></i> QR Badges</a></li>
                     <li><a href="settings.php" class="nav-link"><i class="fa-solid fa-sliders"></i> Settings</a></li>
                     <li><a href="../scanner.html" target="_blank" class="nav-link"><i class="fa-solid fa-camera"></i> Scanner</a></li>
@@ -153,10 +104,6 @@ foreach ($allStaff as $staff) {
             </nav>
 
             <div class="nav-actions">
-                <div class="live-date-pill">
-                    <span class="live-date-dot"></span>
-                    <span><?php echo date('D, M j, Y'); ?></span>
-                </div>
                 <a href="../logout.php" class="btn btn-secondary btn-sm" title="Log out">
                     <i class="fa-solid fa-arrow-right-from-bracket"></i> Logout
                 </a>
@@ -165,6 +112,25 @@ foreach ($allStaff as $staff) {
     </header>
 
     <main class="container">
+        <!-- Page Header & Metrics -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+            <div>
+                <h1 style="font-size: 26px; font-weight: 800; color: var(--neutral-900); margin: 0 0 6px 0; display: flex; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-users" style="color: var(--primary);"></i> Staff Directory
+                </h1>
+                <p style="color: var(--neutral-500); font-size: 14px; margin: 0;">Complete list and management for all showroom staff members.</p>
+            </div>
+            
+            <div style="display: flex; gap: 12px;">
+                <button type="button" class="btn btn-primary" onclick="openAddStaffModal()">
+                    <i class="fa-solid fa-user-plus"></i> Add New Staff
+                </button>
+                <a href="qrcodes.php" class="btn btn-secondary">
+                    <i class="fa-solid fa-qrcode"></i> QR Badges
+                </a>
+            </div>
+        </div>
+
         <!-- Showroom Branch Switcher Bar -->
         <section class="branch-bar-card">
             <div class="branch-bar-left">
@@ -205,12 +171,12 @@ foreach ($allStaff as $staff) {
         <div class="branch-active-banner" id="branchActiveBanner">
             <span class="branch-banner-dot"></span>
             <div id="branchBannerText" style="flex: 1;">
-                <strong>All Branches:</strong> Showing all showroom staff. Attendance check-in rules apply according to each staff member's assigned branch opening time.
+                <strong>All Branches:</strong> Showing all showroom staff across all locations.
             </div>
         </div>
 
-        <!-- KPI Summary Cards -->
-        <section class="stats-grid">
+        <!-- Quick Summary Cards -->
+        <section class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 24px;">
             <div class="stat-card">
                 <div class="stat-content">
                     <span class="stat-label">Total Staff</span>
@@ -223,8 +189,8 @@ foreach ($allStaff as $staff) {
 
             <div class="stat-card">
                 <div class="stat-content">
-                    <span class="stat-label">Present (Full Day)</span>
-                    <span class="stat-value" id="kpi-present"><?php echo $presentCount; ?></span>
+                    <span class="stat-label">Active Staff</span>
+                    <span class="stat-value" id="kpi-active" style="color: var(--success);"><?php echo $activeCount; ?></span>
                 </div>
                 <div class="stat-icon present">
                     <i class="fa-solid fa-user-check"></i>
@@ -233,28 +199,28 @@ foreach ($allStaff as $staff) {
 
             <div class="stat-card">
                 <div class="stat-content">
-                    <span class="stat-label">Half Day</span>
-                    <span class="stat-value" id="kpi-halfday"><?php echo $halfDayCount; ?></span>
+                    <span class="stat-label">Monthly Payroll</span>
+                    <span class="stat-value" id="kpi-payroll" style="font-size: 24px; color: var(--primary);">Rs. <?php echo number_format($totalSalaryBudget); ?></span>
+                </div>
+                <div class="stat-icon total">
+                    <i class="fa-solid fa-money-bill-wave"></i>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-content">
+                    <span class="stat-label">Advances This Month</span>
+                    <span class="stat-value" id="kpi-advances" style="font-size: 24px; color: #b45309;">Rs. <?php echo number_format($totalAdvancesGiven); ?></span>
                 </div>
                 <div class="stat-icon halfday">
-                    <i class="fa-solid fa-user-clock"></i>
+                    <i class="fa-solid fa-hand-holding-dollar"></i>
                 </div>
             </div>
 
             <div class="stat-card">
                 <div class="stat-content">
-                    <span class="stat-label">Absent Today</span>
-                    <span class="stat-value" id="kpi-absent"><?php echo $absentCount; ?></span>
-                </div>
-                <div class="stat-icon absent">
-                    <i class="fa-solid fa-user-xmark"></i>
-                </div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-content">
-                    <span class="stat-label">Paused</span>
-                    <span class="stat-value" id="kpi-paused"><?php echo $pausedCount; ?></span>
+                    <span class="stat-label">Paused Accounts</span>
+                    <span class="stat-value" id="kpi-paused" style="color: var(--warning);"><?php echo $pausedCount; ?></span>
                 </div>
                 <div class="stat-icon paused">
                     <i class="fa-solid fa-user-slash"></i>
@@ -262,7 +228,7 @@ foreach ($allStaff as $staff) {
             </div>
         </section>
 
-        <!-- Search, Filter & Action Toolbar -->
+        <!-- Search & Filter Toolbar -->
         <section class="toolbar-card">
             <div class="search-box">
                 <i class="fa-solid fa-magnifying-glass search-icon"></i>
@@ -271,19 +237,8 @@ foreach ($allStaff as $staff) {
 
             <div class="filter-pills">
                 <button type="button" class="filter-btn active" onclick="setFilter('all', this)">All (<?php echo $totalStaff; ?>)</button>
-                <button type="button" class="filter-btn" onclick="setFilter('present', this)">Present (<?php echo $presentCount; ?>)</button>
-                <button type="button" class="filter-btn" onclick="setFilter('halfday', this)">Half Day (<?php echo $halfDayCount; ?>)</button>
-                <button type="button" class="filter-btn" onclick="setFilter('absent', this)">Absent (<?php echo $absentCount; ?>)</button>
+                <button type="button" class="filter-btn" onclick="setFilter('active', this)">Active (<?php echo $activeCount; ?>)</button>
                 <button type="button" class="filter-btn" onclick="setFilter('paused', this)">Paused (<?php echo $pausedCount; ?>)</button>
-            </div>
-
-            <div class="toolbar-actions">
-                <button type="button" class="btn btn-primary" onclick="openAddStaffModal()">
-                    <i class="fa-solid fa-user-plus"></i> Add New Staff
-                </button>
-                <a href="qrcodes.php" class="btn btn-secondary">
-                    <i class="fa-solid fa-qrcode"></i> QR Badges
-                </a>
             </div>
         </section>
 
@@ -292,31 +247,6 @@ foreach ($allStaff as $staff) {
             <?php foreach ($allStaff as $staff): 
                 $isPaused = ($staff['status'] === 'paused');
                 $today = $todayAttendance[$staff['id']] ?? null;
-                
-                $statusType = 'absent';
-                $badgeClass = 'badge-danger';
-                $statusText = 'Absent';
-                $timeText = '';
-
-                if ($isPaused) {
-                    $statusType = 'paused';
-                    $badgeClass = 'badge-secondary';
-                    $statusText = 'Account Paused';
-                } elseif ($today) {
-                    if ($today['status'] === 'full_day') {
-                        $statusType = 'present';
-                        $badgeClass = 'badge-success';
-                        $statusText = 'Full Day';
-                    } else {
-                        $statusType = 'halfday';
-                        $badgeClass = 'badge-warning';
-                        $statusText = 'Half Day';
-                    }
-                    if (!empty($today['arrived_at'])) {
-                        $timeText = date('h:i A', strtotime($today['arrived_at']));
-                    }
-                }
-
                 $avatarImg = !empty($staff['profile_picture']) ? '../uploads/staff/' . $staff['profile_picture'] : '../uploads/staff/default.png';
             ?>
                 <article class="staff-card <?php echo $isPaused ? 'paused' : ''; ?>" 
@@ -325,15 +255,16 @@ foreach ($allStaff as $staff) {
                          data-name="<?php echo strtolower(htmlspecialchars($staff['name'])); ?>"
                          data-phone="<?php echo htmlspecialchars($staff['phone'] ?? ''); ?>"
                          data-email="<?php echo strtolower(htmlspecialchars($staff['email'] ?? '')); ?>"
-                         data-status="<?php echo $statusType; ?>"
-                         data-attendance-status="<?php echo $today ? $today['status'] : ''; ?>"
-                         data-arrived-at="<?php echo ($today && !empty($today['arrived_at'])) ? date('h:i A', strtotime($today['arrived_at'])) : ''; ?>">
+                         data-status="<?php echo $isPaused ? 'paused' : 'active'; ?>"
+                         data-base-salary="<?php echo $staffPayroll[$staff['id']]['base_salary'] ?? ($staff['salary'] ?? 0); ?>"
+                         data-advance-amount="<?php echo $staffPayroll[$staff['id']]['advance_amount'] ?? 0; ?>"
+                         data-remaining-salary="<?php echo $staffPayroll[$staff['id']]['remaining_salary'] ?? ($staff['salary'] ?? 0); ?>">
                     
                     <div>
                         <div class="staff-card-header">
                             <div class="staff-avatar-wrapper">
                                 <div class="staff-avatar">
-                                    <img src="<?php echo $avatarImg; ?>" alt="<?php echo htmlspecialchars($staff['name']); ?>" onerror="this.src='https://ui-avatars.com/api/?name=<?php echo urlencode($staff['name']); ?>&background=4f46e5&color=fff';">
+                                    <img src="<?php echo $avatarImg; ?>" alt="<?php echo htmlspecialchars($staff['name']); ?>" onerror="this.src='../uploads/staff/default.png';">
                                 </div>
                                 <span class="avatar-status-dot <?php echo $isPaused ? 'paused' : 'active'; ?>" title="<?php echo $isPaused ? 'Paused' : 'Active'; ?>"></span>
                             </div>
@@ -343,13 +274,15 @@ foreach ($allStaff as $staff) {
                                 
                                 <div class="staff-meta-row">
                                     <i class="fa-solid fa-phone staff-meta-icon"></i>
-                                    <span><?php echo htmlspecialchars($staff['phone'] ?: 'No phone'); ?></span>
+                                    <span><?php echo htmlspecialchars($staff['phone'] ?? 'No Phone'); ?></span>
                                 </div>
                                 
-                                <div class="staff-meta-row">
-                                    <i class="fa-solid fa-envelope staff-meta-icon"></i>
-                                    <span><?php echo htmlspecialchars($staff['email'] ?: 'No email'); ?></span>
-                                </div>
+                                <?php if (!empty($staff['email'])): ?>
+                                    <div class="staff-meta-row">
+                                        <i class="fa-solid fa-envelope staff-meta-icon"></i>
+                                        <span class="staff-email" title="<?php echo htmlspecialchars($staff['email']); ?>"><?php echo htmlspecialchars($staff['email']); ?></span>
+                                    </div>
+                                <?php endif; ?>
 
                                 <?php
                                     $bClass = 'badge-branch-default';
@@ -366,69 +299,75 @@ foreach ($allStaff as $staff) {
                                         $bIcon = 'fa-child';
                                     }
                                 ?>
-                                <div class="badge-branch <?php echo $bClass; ?>">
+                                <div class="badge-branch <?php echo $bClass; ?>" style="margin-bottom: 6px;">
                                     <i class="fa-solid <?php echo $bIcon; ?>"></i>
                                     <span><?php echo htmlspecialchars($branchTitle); ?></span>
                                     <span style="font-weight: 500; opacity: 0.8; font-size: 10px;">• Opens <?php echo date('h:i A', strtotime($staff['branch_opening_time'] ?? '08:00:00')); ?></span>
                                 </div>
+
+                                <div class="staff-meta-row">
+                                    <i class="fa-regular fa-calendar staff-meta-icon"></i>
+                                    <span>Joined <?php echo date('M j, Y', strtotime($staff['join_date'] ?? date('Y-m-d'))); ?></span>
+                                </div>
+
+                                <?php 
+                                    $p = $staffPayroll[$staff['id']] ?? null;
+                                    $baseSal = $p ? $p['base_salary'] : (float)($staff['salary'] ?? 0);
+                                    $advVal = $p ? $p['advance_amount'] : 0;
+                                    $remVal = $p ? $p['remaining_salary'] : $baseSal;
+                                ?>
+                                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--neutral-200); font-size: 12px; display: flex; flex-direction: column; gap: 3px;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--neutral-500);">Monthly Salary:</span>
+                                        <strong style="color: var(--neutral-900);">LKR <?php echo number_format($baseSal, 2); ?></strong>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #b45309;">Total Advances:</span>
+                                        <strong style="color: #b45309;">-LKR <?php echo number_format($advVal, 2); ?></strong>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; font-weight: 700;">
+                                        <span style="color: #2563eb;">Remaining:</span>
+                                        <strong style="color: #2563eb;">LKR <?php echo number_format($remVal, 2); ?></strong>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Today's Attendance Banner -->
-                        <div class="attendance-status-banner" style="margin-top: 16px;">
-                            <span class="status-indicator-group">
-                                <span class="badge <?php echo $badgeClass; ?>">
-                                    <?php if ($statusType === 'present'): ?>
-                                        <i class="fa-solid fa-circle-check"></i>
-                                    <?php elseif ($statusType === 'halfday'): ?>
-                                        <i class="fa-solid fa-clock"></i>
-                                    <?php elseif ($statusType === 'absent'): ?>
-                                        <i class="fa-solid fa-circle-xmark"></i>
-                                    <?php else: ?>
-                                        <i class="fa-solid fa-circle-pause"></i>
-                                    <?php endif; ?>
-                                    <?php echo $statusText; ?>
-                                </span>
+                        <!-- Status & Attendance Banner -->
+                        <div class="attendance-status-banner" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+                            <span class="badge <?php echo $isPaused ? 'badge-secondary' : 'badge-success'; ?>">
+                                <i class="fa-solid <?php echo $isPaused ? 'fa-circle-pause' : 'fa-circle-check'; ?>"></i> 
+                                <?php echo $isPaused ? 'Paused' : 'Active Member'; ?>
                             </span>
 
-                            <?php if ($timeText): ?>
-                                <span class="attendance-time-pill" style="font-size: 13px; font-weight: 600; color: var(--neutral-600);">
-                                    <i class="fa-regular fa-clock"></i> <?php echo $timeText; ?>
+                            <?php if ($today): ?>
+                                <span class="badge <?php echo ($today['status'] === 'full_day') ? 'badge-primary' : 'badge-warning'; ?>" style="font-size: 11px;">
+                                    Today: <?php echo ($today['status'] === 'full_day') ? 'Full Day' : 'Half Day'; ?>
                                 </span>
                             <?php endif; ?>
                         </div>
                     </div>
 
-                    <!-- Actions -->
-                    <div class="staff-card-actions">
-                        <div>
-                            <?php if (!$isPaused && !$today): ?>
-                                <button type="button" class="btn btn-mark btn-sm btn-block" onclick="markAttendance(<?php echo $staff['id']; ?>, this)">
-                                    <i class="fa-solid fa-check"></i> Mark Present
-                                </button>
-                            <?php elseif (!$isPaused && $today): ?>
-                                <button type="button" class="btn btn-marked btn-sm btn-block" disabled>
-                                    <i class="fa-solid fa-check-double"></i> Marked
-                                </button>
-                            <?php else: ?>
-                                <button type="button" class="btn btn-secondary btn-sm btn-block" disabled>
-                                    <i class="fa-solid fa-ban"></i> Inactive
-                                </button>
-                            <?php endif; ?>
-                        </div>
-
-                        <div class="card-action-more">
-                            <a href="staff_details.php?id=<?php echo $staff['id']; ?>" class="btn btn-secondary btn-sm" title="View Full Attendance History">
+                    <!-- Staff Management Actions -->
+                    <div class="staff-card-actions" style="margin-top: 16px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%;">
+                            <a href="staff_details.php?id=<?php echo $staff['id']; ?>" class="btn btn-primary btn-sm btn-block" style="display: flex; align-items: center; justify-content: center; gap: 6px;">
                                 <i class="fa-solid fa-chart-line"></i> Details
                             </a>
 
+                            <a href="qrcodes.php#badge-<?php echo $staff['id']; ?>" class="btn btn-secondary btn-sm btn-block" style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                <i class="fa-solid fa-qrcode"></i> Badge
+                            </a>
+                        </div>
+
+                        <div class="card-action-more" style="margin-top: 8px;">
                             <?php if ($isPaused): ?>
-                                <button type="button" class="btn btn-success btn-sm" onclick="togglePause(<?php echo $staff['id']; ?>, 'unpause')" title="Unpause Staff Account">
-                                    <i class="fa-solid fa-play"></i>
+                                <button type="button" class="btn btn-success btn-sm btn-block" onclick="togglePause(<?php echo $staff['id']; ?>, 'unpause')">
+                                    <i class="fa-solid fa-play"></i> Unpause Account
                                 </button>
                             <?php else: ?>
-                                <button type="button" class="btn btn-warning btn-sm" onclick="togglePause(<?php echo $staff['id']; ?>, 'pause')" title="Pause Staff Account">
-                                    <i class="fa-solid fa-pause"></i>
+                                <button type="button" class="btn btn-warning btn-sm btn-block" onclick="togglePause(<?php echo $staff['id']; ?>, 'pause')">
+                                    <i class="fa-solid fa-pause"></i> Pause Account
                                 </button>
                             <?php endif; ?>
 
@@ -441,7 +380,7 @@ foreach ($allStaff as $staff) {
             <?php endforeach; ?>
         </section>
     </main>
-    
+
     <!-- Add Staff Modal -->
     <div id="addStaffModal" class="modal">
         <div class="modal-content">
@@ -465,7 +404,7 @@ foreach ($allStaff as $staff) {
                     <label for="email">Email Address</label>
                     <input type="email" id="email" name="email" class="form-control" placeholder="e.g. staff@logro.com">
                 </div>
-                
+
                 <div class="form-group">
                     <label for="branch_id">Assigned Branch *</label>
                     <select id="branch_id" name="branch_id" class="form-control" required>
@@ -473,12 +412,13 @@ foreach ($allStaff as $staff) {
                             <option value="<?php echo $b['id']; ?>"><?php echo htmlspecialchars($b['name']); ?> (Opens <?php echo date('h:i A', strtotime($b['opening_time'])); ?>)</option>
                         <?php endforeach; ?>
                     </select>
-                    <span class="form-help">Staff check-in window and shift start will adhere to this branch's opening hours.</span>
+                    <small class="form-help">Staff member's check-in schedule will adhere to this showroom's opening time.</small>
                 </div>
 
                 <div class="form-group">
-                    <label for="salary">Monthly Base Salary (LKR) *</label>
+                    <label for="salary">Fixed Monthly Salary (LKR) *</label>
                     <input type="number" id="salary" name="salary" class="form-control" placeholder="e.g. 30000" step="any" min="0" value="30000" required>
+                    <small class="form-help">Base monthly pay used for calculating daily rate (Salary/30) and advance deductions.</small>
                 </div>
                 
                 <div class="form-group">
@@ -498,14 +438,9 @@ foreach ($allStaff as $staff) {
                 </div>
             </form>
         </div>
-    </div>    
-    
-    <div class="app-watermark">
-        <span class="dot"></span>
-        <span>Developed by <strong><a href="#" onclick="openExternalLink(event, 'https://elitefort.net')">EliteFort</a></strong></span>
     </div>
 
-    
+
     <script src="../assets/js/main.js"></script>
     <script>
         const branchesData = <?php echo json_encode($branchesMap); ?>;
@@ -527,14 +462,14 @@ foreach ($allStaff as $staff) {
             const info = branchesData[currentBranch];
             if (bannerText) {
                 if (currentBranch === 'all') {
-                    bannerText.innerHTML = '<strong>All Branches:</strong> Showing all showroom staff across all locations. Attendance check-in rules apply according to each staff member\'s assigned branch opening time.';
+                    bannerText.innerHTML = '<strong>All Branches:</strong> Showing all showroom staff across all locations.';
                 } else if (info) {
                     bannerText.innerHTML = `<strong>${info.name}:</strong> Showing working staff assigned to <strong>${info.name}</strong>. Operating Hours: <strong>${info.formatted_opening} – ${info.formatted_closing}</strong>. Early check-in opens at <strong>${info.earliest_checkin}</strong>.`;
                 }
             }
 
             // Sync URL parameter without page reload
-            const newUrl = (currentBranch === 'all') ? 'dashboard.php' : 'dashboard.php?branch=' + encodeURIComponent(currentBranch);
+            const newUrl = (currentBranch === 'all') ? 'staffs.php' : 'staffs.php?branch=' + encodeURIComponent(currentBranch);
             window.history.replaceState({ branch: currentBranch }, '', newUrl);
 
             filterStaffCards();
@@ -552,10 +487,10 @@ foreach ($allStaff as $staff) {
             const cards = document.querySelectorAll('#staffGrid .staff-card');
 
             let totalInBranch = 0;
-            let presentInBranch = 0;
-            let halfdayInBranch = 0;
-            let absentInBranch = 0;
+            let activeInBranch = 0;
             let pausedInBranch = 0;
+            let payrollInBranch = 0;
+            let advancesInBranch = 0;
 
             cards.forEach(card => {
                 const cardBranch = card.getAttribute('data-branch-id') || '1';
@@ -563,6 +498,8 @@ foreach ($allStaff as $staff) {
                 const phone = card.getAttribute('data-phone') || '';
                 const email = card.getAttribute('data-email') || '';
                 const status = card.getAttribute('data-status') || '';
+                const baseSal = parseFloat(card.getAttribute('data-base-salary') || 0);
+                const advVal = parseFloat(card.getAttribute('data-advance-amount') || 0);
 
                 const matchesBranch = (currentBranch === 'all') || (cardBranch === currentBranch);
                 const matchesQuery = !query || name.includes(query) || phone.includes(query) || email.includes(query);
@@ -570,10 +507,13 @@ foreach ($allStaff as $staff) {
 
                 if (matchesBranch) {
                     totalInBranch++;
-                    if (status === 'present') presentInBranch++;
-                    else if (status === 'halfday') halfdayInBranch++;
-                    else if (status === 'absent') absentInBranch++;
-                    else if (status === 'paused') pausedInBranch++;
+                    if (status === 'paused') {
+                        pausedInBranch++;
+                    } else {
+                        activeInBranch++;
+                    }
+                    payrollInBranch += baseSal;
+                    advancesInBranch += advVal;
                 }
 
                 if (matchesBranch && matchesQuery && matchesFilter) {
@@ -583,27 +523,25 @@ foreach ($allStaff as $staff) {
                 }
             });
 
-            // Dynamically recalculate KPI metrics for the selected branch
+            // Update stats dynamically for this branch
             const kpiTotal = document.getElementById('kpi-total');
-            const kpiPresent = document.getElementById('kpi-present');
-            const kpiHalfday = document.getElementById('kpi-halfday');
-            const kpiAbsent = document.getElementById('kpi-absent');
+            const kpiActive = document.getElementById('kpi-active');
+            const kpiPayroll = document.getElementById('kpi-payroll');
+            const kpiAdvances = document.getElementById('kpi-advances');
             const kpiPaused = document.getElementById('kpi-paused');
 
             if (kpiTotal) kpiTotal.textContent = totalInBranch;
-            if (kpiPresent) kpiPresent.textContent = presentInBranch;
-            if (kpiHalfday) kpiHalfday.textContent = halfdayInBranch;
-            if (kpiAbsent) kpiAbsent.textContent = absentInBranch;
+            if (kpiActive) kpiActive.textContent = activeInBranch;
+            if (kpiPayroll) kpiPayroll.textContent = 'Rs. ' + Math.round(payrollInBranch).toLocaleString();
+            if (kpiAdvances) kpiAdvances.textContent = 'Rs. ' + Math.round(advancesInBranch).toLocaleString();
             if (kpiPaused) kpiPaused.textContent = pausedInBranch;
 
-            // Dynamically update filter pill counts
+            // Update filter pill counts
             const filterBtns = document.querySelectorAll('.filter-pills .filter-btn');
-            if (filterBtns.length >= 5) {
+            if (filterBtns.length >= 3) {
                 filterBtns[0].textContent = `All (${totalInBranch})`;
-                filterBtns[1].textContent = `Present (${presentInBranch})`;
-                filterBtns[2].textContent = `Half Day (${halfdayInBranch})`;
-                filterBtns[3].textContent = `Absent (${absentInBranch})`;
-                filterBtns[4].textContent = `Paused (${pausedInBranch})`;
+                filterBtns[1].textContent = `Active (${activeInBranch})`;
+                filterBtns[2].textContent = `Paused (${pausedInBranch})`;
             }
         }
 
@@ -614,11 +552,6 @@ foreach ($allStaff as $staff) {
                 if (targetBtn) selectBranch(currentBranch, targetBtn);
             }
         });
-
-        function openExternalLink(event, url) {
-            event.preventDefault();
-            window.open(url, '_blank');
-        }
     </script>
 </body>
 </html>

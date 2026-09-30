@@ -1,5 +1,8 @@
-# Database dumps
+# Database dumps & local sqlite files
 Dump*/
+*.sqlite
+*.sqlite3
+database/*.sqlite*
 
 # User uploads
 uploads/

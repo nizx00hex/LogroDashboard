@@ -1,0 +1,22 @@
+{
+  "name": "LOGRO AMS Scanner",
+  "short_name": "AMS Scanner",
+  "description": "Offline-first Attendance QR Scanner for LOGRO Showroom Staff",
+  "start_url": "scanner.html",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

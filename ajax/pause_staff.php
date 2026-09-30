@@ -1,9 +1,9 @@
 <?php
 require_once '../config.php';
 require_once '../classes/Database.php';
-
 require_once '../classes/Admin.php';
 require_once '../classes/Staff.php';
+require_once '../classes/Attendance.php';
 
 header('Content-Type: application/json');
 
@@ -14,7 +14,7 @@ if (!$admin->isLoggedIn()) {
 }
 
 $data = json_decode(file_get_contents('php://input'), true);
-$staffId = $data['staff_id'] ?? 0;
+$staffId = (int)($data['staff_id'] ?? 0);
 
 if (!$staffId) {
     echo json_encode(['success' => false, 'message' => 'Invalid staff ID']);
@@ -23,5 +23,12 @@ if (!$staffId) {
 
 $staff = new Staff();
 $result = $staff->pauseStaff($staffId);
-echo json_encode(['success' => $result]);
+
+$attendance = new Attendance();
+$todayRecord = $attendance->getTodayAttendance($staffId);
+
+echo json_encode([
+    'success' => $result,
+    'today_attendance' => $todayRecord ?: null
+]);
 ?>

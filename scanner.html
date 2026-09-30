@@ -3,99 +3,1143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>QR Scanner – Attendance</title>
+    <title>Live QR Scanner – LOGRO AMS (Offline Ready)</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#090d16">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AMS Scanner">
+    <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <!-- Embedded offline SVG icons and styling (Zero external CDN dependency) -->
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: #1a1a2e;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #090d16;
+            background-image: radial-gradient(circle at 50% 10%, rgba(79, 70, 229, 0.15) 0%, #090d16 80%);
             display: flex;
-            justify-content: center;
-            align-items: center;
+            flex-direction: column;
             min-height: 100vh;
-            padding: 16px;
+            padding: 0;
+            margin: 0;
+            color: #ffffff;
+            overflow-x: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
-        .scanner-box {
-            background: white;
+
+        /* SVG Icon styling */
+        .svg-icon {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            vertical-align: -0.15em;
+            fill: currentColor;
+        }
+
+        .scanner-container {
+            width: 100%;
+            max-width: 540px;
+            text-align: center;
+            position: relative;
+        }
+
+        .scanner-header {
+            margin-bottom: 20px;
+        }
+
+        .scanner-header h1 {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 0 0 6px 0;
+        }
+
+        .scanner-header p {
+            color: #94a3b8;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        /* Offline Sync Notice Bar */
+        .offline-notice-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            padding: 10px 16px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+
+        .net-status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-weight: 600;
+        }
+
+        .net-status-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background-color: #10b981;
+            box-shadow: 0 0 8px #10b981;
+            transition: background-color 0.3s, box-shadow 0.3s;
+        }
+
+        .net-status-dot.offline {
+            background-color: #f59e0b;
+            box-shadow: 0 0 8px #f59e0b;
+        }
+
+        .sync-action-btn {
+            background: #4f46e5;
+            color: #ffffff;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .sync-action-btn:hover {
+            background: #4338ca;
+            transform: scale(1.02);
+        }
+
+        .sync-action-btn:disabled {
+            background: #475569;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .scanner-viewport-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 24px;
             padding: 20px;
-            max-width: 600px;
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .viewfinder-wrapper {
+            position: relative;
+            border-radius: 18px;
+            overflow: hidden;
+            background: #000000;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+            min-height: 280px;
+        }
+
+        #qr-reader {
             width: 100%;
-            text-align: center;
-            box-shadow: 0 20px 35px rgba(0,0,0,0.3);
+            border: none !important;
         }
-        h2 { color: #1a1a2e; margin-bottom: 8px; }
-        p { color: #555; margin-bottom: 20px; }
-        #qr-reader { width: 100%; margin: 0 auto; border-radius: 16px; overflow: hidden; }
-        #result { margin-top: 20px; padding: 12px; border-radius: 12px; background: #f0f2f5; font-size: 14px; }
-        button {
+
+        #qr-reader video {
+            border-radius: 18px;
+            object-fit: cover;
+        }
+
+        /* Animated Laser Scanning Beam */
+        .laser-beam {
+            position: absolute;
+            left: 5%;
+            right: 5%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #06b6d4, #3b82f6, transparent);
+            box-shadow: 0 0 14px #06b6d4, 0 0 4px #ffffff;
+            z-index: 10;
+            animation: scanAnimation 2.2s ease-in-out infinite alternate;
+            pointer-events: none;
+        }
+
+        @keyframes scanAnimation {
+            0% { top: 10%; opacity: 0.3; }
+            50% { opacity: 1; }
+            100% { top: 90%; opacity: 0.3; }
+        }
+
+        /* Corner Viewfinder Brackets */
+        .corner-bracket {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #06b6d4;
+            z-index: 11;
+            pointer-events: none;
+        }
+        .corner-tl { top: 14px; left: 14px; border-right: none; border-bottom: none; border-top-left-radius: 10px; }
+        .corner-tr { top: 14px; right: 14px; border-left: none; border-bottom: none; border-top-right-radius: 10px; }
+        .corner-bl { bottom: 14px; left: 14px; border-right: none; border-top: none; border-bottom-left-radius: 10px; }
+        .corner-br { bottom: 14px; right: 14px; border-left: none; border-top: none; border-bottom-right-radius: 10px; }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
             margin-top: 20px;
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 30px;
-            cursor: pointer;
-            font-size: 16px;
+            padding: 8px 18px;
+            border-radius: 9999px;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            font-size: 14px;
+            font-weight: 600;
+            color: #e2e8f0;
         }
-        button:hover { background: #5a67d8; }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #10b981;
+            box-shadow: 0 0 8px #10b981;
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .scanner-actions {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 24px;
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: #ffffff;
+        }
+
+        /* Check-In Modal Overlay for Non-Reloading AJAX Scanner */
+        .checkin-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.94);
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            border-radius: 24px;
+            padding: 24px 20px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.25s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .overlay-icon-circle {
+            width: 68px;
+            height: 68px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            margin-bottom: 14px;
+        }
+
+        .overlay-icon-circle.success {
+            background: #ecfdf5;
+            color: #10b981;
+            border: 2px solid #a7f3d0;
+        }
+
+        .overlay-icon-circle.error {
+            background: #fef2f2;
+            color: #ef4444;
+            border: 2px solid #fecaca;
+        }
+
+        .overlay-avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #6366f1;
+            margin-bottom: 10px;
+        }
+
+        .overlay-title {
+            font-size: 20px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .overlay-msg {
+            font-size: 13px;
+            color: #cbd5e1;
+            margin-bottom: 14px;
+            max-width: 90%;
+            line-height: 1.4;
+        }
+
+        .overlay-info-box {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 12px 16px;
+            width: 100%;
+            max-width: 320px;
+            margin-bottom: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* Toast notifications */
+        .scanner-toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #1e293b;
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px 20px;
+            border-radius: 9999px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .scanner-toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
-<div class="scanner-box">
-    <h2>📸 Staff Attendance Scanner</h2>
-    <p>Place your QR code in front of the camera</p>
-    <div id="qr-reader"></div>
-    <div id="result">Waiting for scan...</div>
-    <button id="restartBtn">⟳ Restart Camera</button>
-</div>
+    <!-- Hidden SVG Sprites Definition for 100% Offline Icon Rendering -->
+    <svg style="display: none;" xmlns="http://www.w3.org/2000/svg">
+        <symbol id="icon-clipboard-user" viewBox="0 0 384 512">
+            <path d="M280 64h40c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V128C0 92.7 28.7 64 64 64h40 9.6C121 27.5 153.3 0 192 0s71 27.5 78.4 64H280zM64 112c-8.8 0-16 7.2-16 16V448c0 8.8 7.2 16 16 16H320c8.8 0 16-7.2 16-16V128c0-8.8-7.2-16-16-16H272v24c0 13.3-10.7 24-24 24H136c-13.3 0-24-10.7-24-24V112H64zm128-64a24 24 0 1 0 0 48 24 24 0 1 0 0-48zm0 160a56 56 0 1 1 0 112 56 56 0 1 1 0-112zm-80 184c0-26.5 21.5-48 48-48h64c26.5 0 48 21.5 48 48 0 13.3-10.7 24-24 24H136c-13.3 0-24-10.7-24-24z"/>
+        </symbol>
+        <symbol id="icon-qrcode" viewBox="0 0 448 512">
+            <path d="M0 80C0 53.5 21.5 32 48 32h96c26.5 0 48 21.5 48 48v96c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V80zm48 16c-8.8 0-16 7.2-16 16v64c0 8.8 7.2 16 16 16h64c8.8 0 16-7.2 16-16V112c0-8.8-7.2-16-16-16H48zm16 48a16 16 0 1 0 32 0 16 16 0 1 0 -32 0zm192-80c0-26.5 21.5-48 48-48h96c26.5 0 48 21.5 48 48v96c0 26.5-21.5 48-48 48H304c-26.5 0-48-21.5-48-48V80zm48 16c-8.8 0-16 7.2-16 16v64c0 8.8 7.2 16 16 16h64c8.8 0 16-7.2 16-16V112c0-8.8-7.2-16-16-16H304zm16 48a16 16 0 1 0 32 0 16 16 0 1 0 -32 0zM0 336c0-26.5 21.5-48 48-48h96c26.5 0 48 21.5 48 48v96c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V336zm48 16c-8.8 0-16 7.2-16 16v64c0 8.8 7.2 16 16 16h64c8.8 0 16-7.2 16-16V368c0-8.8-7.2-16-16-16H48zm16 48a16 16 0 1 0 32 0 16 16 0 1 0 -32 0zm208-16v-48h48v48h-48zm48 48h-48v48h48v-48zm48-48v-48h48v48h-48zm0 96h-48v48h48v-48zm48-48h-48v48h48v-48z"/>
+        </symbol>
+        <symbol id="icon-camera" viewBox="0 0 512 512">
+            <path d="M149.1 64l-19.6 48H64C28.7 112 0 140.7 0 176v240c0 35.3 28.7 64 64 64h384c35.3 0 64-28.7 64-64V176c0-35.3-28.7-64-64-64H382.5l-19.6-48H149.1zM256 192a112 112 0 1 1 0 224 112 112 0 1 1 0-224zm0 48a64 64 0 1 0 0 128 64 64 0 1 0 0-128z"/>
+        </symbol>
+        <symbol id="icon-chart-pie" viewBox="0 0 576 512">
+            <path d="M304 240V16c0-9 7.3-16.3 16.3-16 123.6 4 223.7 104.1 227.7 227.7.3 9-7 16.3-16 16.3H304zM240 272H0c0 141.4 114.6 256 256 256 127.3 0 233.1-93.2 252.6-215.3 1.5-9.6-6-18.2-15.7-18.2L240 294.5v-22.5zM208 0c-9 0-16.5 7.1-17.1 16.1C184.2 113.8 113.8 184.2 16.1 190.9 7.1 191.5 0 199 0 208v32h208V0z"/>
+        </symbol>
+        <symbol id="icon-sliders" viewBox="0 0 512 512">
+            <path d="M0 416c0-17.7 14.3-32 32-32l54.7 0c12.3-28.3 40.5-48 73.3-48s61 19.7 73.3 48L480 384c17.7 0 32 14.3 32 32s-14.3 32-32 32l-246.7 0c-12.3 28.3-40.5 48-73.3 48s-61-19.7-73.3-48L32 448c-17.7 0-32-14.3-32-32zm192 0a32 32 0 1 0 -64 0 32 32 0 1 0 64 0zM352 224a32 32 0 1 0 -64 0 32 32 0 1 0 64 0zm-64 32c-12.3 28.3-40.5 48-73.3 48L32 304c-17.7 0-32-14.3-32-32s14.3-32 32-32l182.7 0c12.3-28.3 40.5-48 73.3-48s61 19.7 73.3 48l160.7 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-160.7 0c-12.3 28.3-40.5 48-73.3 48zm128-192a32 32 0 1 0 -64 0 32 32 0 1 0 64 0zm-64 32c-12.3 28.3-40.5 48-73.3 48L32 144C14.3 144 0 129.7 0 112S14.3 80 32 80l246.7 0c12.3-28.3 40.5-48 73.3-48s61 19.7 73.3 48l96.7 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-96.7 0c-12.3 28.3-40.5 48-73.3 48z"/>
+        </symbol>
+        <symbol id="icon-arrow-left" viewBox="0 0 448 512">
+            <path d="M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.2 288 416 288c17.7 0 32-14.3 32-32s-14.3-32-32-32l-306.7 0L214.6 117.2c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/>
+        </symbol>
+        <symbol id="icon-check" viewBox="0 0 448 512">
+            <path d="M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"/>
+        </symbol>
+        <symbol id="icon-circle-check" viewBox="0 0 512 512">
+            <path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM369 209L241 337c-9.4 9.4-24.6 9.4-33.9 0l-64-64c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l47 47L335 175c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9z"/>
+        </symbol>
+        <symbol id="icon-xmark" viewBox="0 0 384 512">
+            <path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/>
+        </symbol>
+        <symbol id="icon-clock" viewBox="0 0 512 512">
+            <path d="M256 0a256 256 0 1 1 0 512A256 256 0 1 1 256 0zm0 48a208 208 0 1 0 0 416A208 208 0 1 0 256 48zm16 80a16 16 0 1 0 -32 0v128c0 4.2 1.7 8.3 4.7 11.3l64 64a16 16 0 0 0 22.6-22.6L272 249.4V128z"/>
+        </symbol>
+        <symbol id="icon-arrows-rotate" viewBox="0 0 512 512">
+            <path d="M142.9 96H24c-13.3 0-24 10.7-24 24v118.9c0 13.3 10.7 24 24 24h118.9c13.3 0 24-10.7 24-24s-10.7-24-24-24H78.8C108.6 154.5 160.7 128 219 128c105.9 0 192 86.1 192 192s-86.1 192-192 192c-35.3 0-68.5-9.6-97-26.3-11.6-6.8-26.5-2.8-33.3 8.7s-2.8 26.5 8.7 33.3C133.5 549 174.5 560 219 560c132.5 0 240-107.5 240-240S351.5 80 219 80C192.5 80 167 85.9 142.9 96z"/>
+        </symbol>
+        <symbol id="icon-file-image" viewBox="0 0 384 512">
+            <path d="M64 0C28.7 0 0 28.7 0 64V448c0 35.3 28.7 64 64 64H320c35.3 0 64-28.7 64-64V160H256c-17.7 0-32-14.3-32-32V0H64zM256 0v128h128L256 0zM128 256a32 32 0 1 1 64 0 32 32 0 1 1 -64 0zm-32 96l40-40c9.4-9.4 24.6-9.4 33.9 0l22.1 22.1 38.1-50.7c9.2-12.3 27.6-13.5 38.3-2.5l51.6 53.1V384H96V352z"/>
+        </symbol>
+        <symbol id="icon-cloud-arrow-up" viewBox="0 0 640 512">
+            <path d="M144 480c-79.5 0-144-64.5-144-144c0-64.3 42.2-118.8 100.8-137.4C108.6 186.2 112 173.5 112 160c0-88.4 71.6-160 160-160c59.3 0 111 32.2 138.7 80.2C425.8 74.2 444.3 70 464 70c70.7 0 128 57.3 128 128c0 9.8-1.1 19.3-3.2 28.4C614.7 243.6 640 280.9 640 324c0 72.9-59.1 132-132 132H144zm183-305c-9.4-9.4-24.6-9.4-33.9 0l-80 80c-9.4 9.4-9.4 24.6 0 33.9s24.6 9.4 33.9 0l39-39V368c0 13.3 10.7 24 24 24s24-10.7 24-24V249l39 39c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-80-80z"/>
+        </symbol>
+        <symbol id="icon-wifi" viewBox="0 0 640 512">
+            <path d="M0 160C0 142.3 14.3 128 32 128h1.1C189.9 128 335.6 187.3 445.7 294.6c12.8 12.5 13 32.7 .5 45.5s-32.7 13-45.5 .5C303 245.4 172.5 192 33.1 192H32c-17.7 0-32-14.3-32-32zm0 128c0-17.7 14.3-32 32-32c94.2 0 181.7 36.4 247.9 96.1c13.1 11.9 13.7 32.1 1.9 45.2s-32.1 13.7-45.2 1.9C180.2 368.5 109 336 32 336c-17.7 0-32-14.3-32-32zm0 128c0-17.7 14.3-32 32-32c32.5 0 62.5 11.7 86.1 31.4c13.6 11.3 15.3 31.5 4 45.1s-31.5 15.3-45.1 4C66.7 448.9 50 448 32 448c-17.7 0-32-14.3-32-32z"/>
+        </symbol>
+        <symbol id="icon-wifi-off" viewBox="0 0 640 512">
+            <path d="M38.8 5.1C26.7-3.6 9.8-1 1.1 11.2s-6.1 29 6.1 37.7L576.8 506.9c12.2 8.7 29 6.1 37.7-6.1s6.1-29-6.1-37.7L38.8 5.1zM286 286.9l-45.7-32.7C304.5 214.3 378.1 192 457.6 192c42.5 0 83.5 6.4 122 18.5c17 5.4 26.4 23.6 21 40.6s-23.6 26.4-40.6 21C526.4 261 492.7 256 457.6 256c-61.9 0-119.5 16.4-169.3 45.1l-2.3-14.2zM128 352a32 32 0 1 1 64 0 32 32 0 1 1 -64 0z"/>
+        </symbol>
+    </svg>
 
-<!-- Local copy of the library -->
-<script src="assets/js/html5-qrcode.min.js"></script>
-<script>
-    let html5QrCode = null;
-    let isScanning = false;
+    <!-- Top Modern Navigation Bar -->
+    <header class="app-navbar" style="background: rgba(15, 23, 42, 0.95); border-bottom: 1px solid rgba(255, 255, 255, 0.1); width: 100%; backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 999;">
+        <div class="navbar-container" style="max-width: 1400px; margin: 0 auto; padding: 0 24px; height: 72px; display: flex; justify-content: space-between; align-items: center;">
+            <a href="pages/dashboard.php" class="brand-wrapper" style="text-decoration: none; display: flex; align-items: center; gap: 12px;">
+                <div class="brand-logo-icon">
+                    <svg class="svg-icon"><use href="#icon-clipboard-user"></use></svg>
+                </div>
+                <div class="brand-text-group">
+                    <span class="brand-title" style="color: #ffffff;">LOGRO AMS</span>
+                    <span class="brand-subtitle" style="color: #818cf8;">Showroom Attendance</span>
+                </div>
+            </a>
 
-    function startScanner() {
-        if (html5QrCode && isScanning) {
-            html5QrCode.stop().then(() => startNewScanner()).catch(err => console.warn(err));
-        } else {
-            startNewScanner();
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="pages/dashboard.php" class="nav-link" style="color: #cbd5e1;"><svg class="svg-icon" style="margin-right: 6px;"><use href="#icon-chart-pie"></use></svg>Dashboard</a></li>
+                    <li><a href="pages/qrcodes.php" class="nav-link" style="color: #cbd5e1;"><svg class="svg-icon" style="margin-right: 6px;"><use href="#icon-qrcode"></use></svg>QR Badges</a></li>
+                    <li><a href="pages/settings.php" class="nav-link" style="color: #cbd5e1;"><svg class="svg-icon" style="margin-right: 6px;"><use href="#icon-sliders"></use></svg>Settings</a></li>
+                    <li><a href="scanner.html" class="nav-link active"><svg class="svg-icon" style="margin-right: 6px;"><use href="#icon-camera"></use></svg>Scanner</a></li>
+                </ul>
+            </nav>
+
+            <div class="nav-actions" style="display: flex; align-items: center; gap: 12px;">
+                <div class="live-date-pill" style="background: rgba(255, 255, 255, 0.1); color: #e2e8f0; border: 1px solid rgba(255, 255, 255, 0.15);">
+                    <span class="live-date-dot"></span>
+                    <span id="scannerLiveDate">Live Scanner</span>
+                </div>
+                <a href="pages/dashboard.php" class="btn btn-secondary btn-sm" style="background: rgba(255, 255, 255, 0.1); color: #fff; border-color: rgba(255, 255, 255, 0.2);">
+                    <svg class="svg-icon" style="margin-right: 4px;"><use href="#icon-arrow-left"></use></svg> Dashboard
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px 20px;">
+        <div class="scanner-container">
+            <div class="scanner-header">
+                <h1>
+                    <svg class="svg-icon" style="color: #06b6d4; font-size: 26px;"><use href="#icon-qrcode"></use></svg>
+                    Staff Attendance Scanner
+                </h1>
+                <p>Scan your QR badge. Continuous non-reloading kiosk mode (100% Offline Capable).</p>
+            </div>
+
+            <!-- Offline & Sync Status Banner -->
+            <div id="offlineNoticeBar" class="offline-notice-bar">
+                <div class="net-status-pill" id="netStatusPill">
+                    <span class="net-status-dot" id="netStatusDot"></span>
+                    <span id="netStatusText">Online • Live Sync Ready</span>
+                </div>
+
+                <div id="pendingSyncWrapper" style="display: flex; align-items: center; gap: 8px;">
+                    <span id="pendingBadge" style="font-size: 11px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); padding: 3px 8px; border-radius: 999px; display: none;">
+                        0 Scans Offline
+                    </span>
+                    <button type="button" class="sync-action-btn" id="manualSyncBtn" onclick="syncPendingScans(true)" style="display: none;">
+                        <svg class="svg-icon"><use href="#icon-cloud-arrow-up"></use></svg> Sync Now
+                    </button>
+                </div>
+            </div>
+
+            <div class="scanner-viewport-card">
+                <!-- Non-Reloading In-Scanner Result Overlay -->
+                <div id="checkinOverlay" class="checkin-overlay">
+                    <div id="overlayIconCircle" class="overlay-icon-circle success">
+                        <svg id="overlayIconSuccess" class="svg-icon" style="width: 32px; height: 32px;"><use href="#icon-check"></use></svg>
+                        <svg id="overlayIconError" class="svg-icon" style="width: 32px; height: 32px; display: none;"><use href="#icon-xmark"></use></svg>
+                    </div>
+
+                    <img id="overlayAvatar" src="uploads/staff/default.png" alt="Staff" class="overlay-avatar" style="display: none;">
+                    <h2 id="overlayTitle" class="overlay-title">Attendance Recorded!</h2>
+                    <p id="overlayMsg" class="overlay-msg">Welcome, staff member!</p>
+
+                    <div id="overlayInfoBox" class="overlay-info-box">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <span style="font-size: 12px; color: #94a3b8; font-weight: 600;">Status:</span>
+                            <span id="overlayStatusBadge" class="badge badge-success" style="font-weight: 700;">
+                                <svg class="svg-icon" style="margin-right: 4px;"><use href="#icon-circle-check"></use></svg>
+                                <span id="overlayStatusText">PRESENT</span>
+                            </span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <span style="font-size: 12px; color: #94a3b8; font-weight: 600;">Shift Credit:</span>
+                            <span id="overlayShiftBadge" class="badge badge-primary">Full Day (100%)</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <span style="font-size: 12px; color: #94a3b8; font-weight: 600;">Arrival Time:</span>
+                            <strong id="overlayTimeDisplay" style="color: #ffffff; font-size: 14px; display: inline-flex; align-items: center; gap: 4px;">
+                                <svg class="svg-icon"><use href="#icon-clock"></use></svg> 09:30 AM
+                            </strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <span style="font-size: 12px; color: #94a3b8; font-weight: 600;">Date:</span>
+                            <span id="overlayDateDisplay" style="color: #cbd5e1; font-size: 12px;">Tuesday, Sep 29, 2026</span>
+                        </div>
+                        <div id="overlayStorageMode" style="display: none; padding-top: 4px; border-top: 1px dashed rgba(255,255,255,0.15); font-size: 11px; color: #fcd34d; text-align: center;">
+                            💾 Saved offline on device • Auto-syncs when online
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-primary btn-sm" onclick="resumeScanningNow()">
+                        <svg class="svg-icon" style="margin-right: 6px;"><use href="#icon-camera"></use></svg> Scan Next Badge
+                    </button>
+                </div>
+
+                <div class="viewfinder-wrapper">
+                    <div class="corner-bracket corner-tl"></div>
+                    <div class="corner-bracket corner-tr"></div>
+                    <div class="corner-bracket corner-bl"></div>
+                    <div class="corner-bracket corner-br"></div>
+                    <div class="laser-beam"></div>
+                    
+                    <div id="qr-reader"></div>
+                </div>
+
+                <div id="statusPill" class="status-pill">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Camera Active • Scanning...</span>
+                </div>
+
+                <div class="scanner-actions">
+                    <button type="button" id="restartBtn" class="btn btn-secondary btn-sm" style="background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2);">
+                        <svg class="svg-icon" style="margin-right: 6px;"><use href="#icon-arrows-rotate"></use></svg> Reset Camera
+                    </button>
+                    <label class="btn btn-secondary btn-sm" style="background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2); cursor: pointer; margin: 0;">
+                        <svg class="svg-icon" style="margin-right: 6px;"><use href="#icon-file-image"></use></svg> Scan QR Image
+                        <input type="file" id="qrFileInput" accept="image/*,.svg" style="display: none;">
+                    </label>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 16px; justify-content: center; margin-top: 24px; flex-wrap: wrap;">
+                <a href="pages/dashboard.php" class="back-link" style="margin: 0;">
+                    <svg class="svg-icon" style="margin-right: 4px;"><use href="#icon-chart-pie"></use></svg> Dashboard
+                </a>
+                <a href="pages/qrcodes.php" class="back-link" style="margin: 0;">
+                    <svg class="svg-icon" style="margin-right: 4px;"><use href="#icon-qrcode"></use></svg> QR Badges
+                </a>
+                <a href="pages/settings.php" class="back-link" style="margin: 0;">
+                    <svg class="svg-icon" style="margin-right: 4px;"><use href="#icon-sliders"></use></svg> Settings
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Toast for Sync Alerts -->
+    <div id="scannerToast" class="scanner-toast">
+        <svg class="svg-icon" style="color: #10b981;"><use href="#icon-circle-check"></use></svg>
+        <span id="toastMsg">Synced offline scans successfully!</span>
+    </div>
+
+    <script src="assets/js/html5-qrcode.min.js"></script>
+    <script>
+        // -------------------------------------------------------------
+        // 1. Service Worker Registration for Offline Kiosk PWA
+        // -------------------------------------------------------------
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then((reg) => {
+                    console.log('AMS Scanner Service Worker registered:', reg.scope);
+                }).catch((err) => {
+                    console.warn('Service Worker registration skipped or failed:', err);
+                });
+            });
         }
-    }
 
-    function startNewScanner() {
-        const resultDiv = document.getElementById('result');
-        resultDiv.innerHTML = '📷 Starting camera...';
-        
-        html5QrCode = new Html5Qrcode("qr-reader");
-        const config = { fps: 10, qrbox: { width: 280, height: 280 } };
-        
-        html5QrCode.start(
-            { facingMode: "environment" },
-            config,
-            (decodedText) => {
-                if (isScanning) {
-                    isScanning = false;
-                    html5QrCode.stop().then(() => {
-                        window.location.href = decodedText;
-                    }).catch(() => {
-                        window.location.href = decodedText;
-                    });
+        // Live Date on Header
+        const dateElem = document.getElementById('scannerLiveDate');
+        if (dateElem) {
+            const now = new Date();
+            dateElem.textContent = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        // Global Scanner State
+        let html5QrCode = null;
+        let isScanning = false;
+        let autoResumeTimer = null;
+        let isSyncing = false;
+
+        // Local Storage Keys
+        const STORAGE_KEY_ROSTER = 'ams_staff_roster';
+        const STORAGE_KEY_SETTINGS = 'ams_settings';
+        const STORAGE_KEY_QUEUE = 'ams_pending_scans';
+        const STORAGE_KEY_SCANNED_TODAY = 'ams_scanned_today_ids';
+
+        // -------------------------------------------------------------
+        // 2. Audio Beep using Web Audio API (100% Offline Audio)
+        // -------------------------------------------------------------
+        function playScanBeep(isSuccess = true) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(isSuccess ? 880 : 330, ctx.currentTime);
+                gain.gain.setValueAtTime(0.18, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + (isSuccess ? 0.18 : 0.35));
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + (isSuccess ? 0.18 : 0.35));
+            } catch (e) {}
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('scannerToast');
+            const toastMsg = document.getElementById('toastMsg');
+            if (!toast || !toastMsg) return;
+            toastMsg.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3500);
+        }
+
+        // -------------------------------------------------------------
+        // 3. Network & Offline State Management
+        // -------------------------------------------------------------
+        function getPendingScans() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY_QUEUE);
+                return data ? JSON.parse(data) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function savePendingScans(scans) {
+            localStorage.setItem(STORAGE_KEY_QUEUE, JSON.stringify(scans));
+            updateNetworkStatusUI();
+        }
+
+        function getCachedRoster() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY_ROSTER);
+                return data ? JSON.parse(data) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function getCachedSettings() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY_SETTINGS);
+                return data ? JSON.parse(data) : { opening_time: '08:30:00', closing_time: '23:59:00', cutoff_time: '12:00:00' };
+            } catch (e) {
+                return { opening_time: '08:30:00', closing_time: '23:59:00', cutoff_time: '12:00:00' };
+            }
+        }
+
+        function updateNetworkStatusUI() {
+            const netDot = document.getElementById('netStatusDot');
+            const netText = document.getElementById('netStatusText');
+            const pendingBadge = document.getElementById('pendingBadge');
+            const syncBtn = document.getElementById('manualSyncBtn');
+
+            const isOnline = navigator.onLine;
+            const pendingScans = getPendingScans();
+            const count = pendingScans.length;
+
+            if (isOnline) {
+                netDot.className = 'net-status-dot';
+                if (count > 0) {
+                    netText.textContent = `Online • ${count} Offline Scan${count > 1 ? 's' : ''} Pending`;
+                } else {
+                    netText.textContent = 'Online • Live Sync Ready';
                 }
-            },
-            (errorMessage) => { /* ignore scan errors */ }
-        ).then(() => {
-            isScanning = true;
-            resultDiv.innerHTML = '✅ Camera ready. Scan your QR code.';
-        }).catch(err => {
-            console.error(err);
-            resultDiv.innerHTML = '❌ Cannot access camera. Use HTTPS or localhost, and allow permission.';
-        });
-    }
+            } else {
+                netDot.className = 'net-status-dot offline';
+                if (count > 0) {
+                    netText.textContent = `Offline Mode • ${count} Scan${count > 1 ? 's' : ''} Saved Locally`;
+                } else {
+                    netText.textContent = 'Offline Mode • Ready to Save Scans';
+                }
+            }
 
-    document.getElementById('restartBtn').addEventListener('click', startScanner);
-    startScanner();
-</script>
+            if (count > 0) {
+                pendingBadge.style.display = 'inline-block';
+                pendingBadge.textContent = `${count} Cached Scan${count > 1 ? 's' : ''}`;
+                if (isOnline) {
+                    syncBtn.style.display = 'inline-flex';
+                    syncBtn.disabled = isSyncing;
+                    syncBtn.innerHTML = isSyncing ? 'Syncing...' : '<svg class="svg-icon"><use href="#icon-cloud-arrow-up"></use></svg> Sync Now';
+                } else {
+                    syncBtn.style.display = 'none';
+                }
+            } else {
+                pendingBadge.style.display = 'none';
+                syncBtn.style.display = 'none';
+            }
+        }
+
+        // -------------------------------------------------------------
+        // 4. Staff Roster Local Caching
+        // -------------------------------------------------------------
+        async function fetchStaffRoster() {
+            if (!navigator.onLine) return;
+            try {
+                const res = await fetch('ajax/checkin_ajax.php?action=roster', { cache: 'no-cache' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && Array.isArray(data.staff)) {
+                        localStorage.setItem(STORAGE_KEY_ROSTER, JSON.stringify(data.staff));
+                        if (data.settings) {
+                            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(data.settings));
+                        }
+                        console.log(`Staff roster cached: ${data.staff.length} staff members.`);
+                    }
+                }
+            } catch (err) {
+                console.warn('Could not refresh staff roster (running offline):', err);
+            }
+        }
+
+        // -------------------------------------------------------------
+        // 5. Batch Offline Scans Sync
+        // -------------------------------------------------------------
+        async function syncPendingScans(isManual = false) {
+            if (isSyncing) return;
+            const scans = getPendingScans();
+            if (scans.length === 0) {
+                if (isManual) showToast('All attendance scans are already synchronized!');
+                return;
+            }
+
+            if (!navigator.onLine) {
+                if (isManual) showToast('Cannot sync: Device is currently offline.', true);
+                return;
+            }
+
+            isSyncing = true;
+            updateNetworkStatusUI();
+
+            try {
+                const response = await fetch('ajax/checkin_ajax.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'sync_offline',
+                        scans: scans.map(s => ({
+                            token: s.token,
+                            date: s.date,
+                            time: s.time
+                        }))
+                    })
+                });
+
+                if (response.ok) {
+                    const resData = await response.json();
+                    if (resData.success) {
+                        // Successfully synced batch
+                        localStorage.removeItem(STORAGE_KEY_QUEUE);
+                        showToast(`Successfully synced ${scans.length} offline attendance scan(s)!`);
+                        fetchStaffRoster();
+                    } else {
+                        showToast(resData.message || 'Sync failed on server', true);
+                    }
+                } else {
+                    showToast('Server error while synchronizing scans', true);
+                }
+            } catch (err) {
+                console.warn('Failed to sync offline scans:', err);
+                if (isManual) showToast('Network error while synchronizing scans', true);
+            } finally {
+                isSyncing = false;
+                updateNetworkStatusUI();
+            }
+        }
+
+        // -------------------------------------------------------------
+        // 6. QR Code Extraction & Offline Check-in Logic
+        // -------------------------------------------------------------
+        function extractToken(decodedText) {
+            if (!decodedText) return '';
+            const match = decodedText.match(/[?&]token=([^&#]+)/);
+            if (match) {
+                return decodeURIComponent(match[1]);
+            }
+            return decodedText.trim();
+        }
+
+        function padZero(n) {
+            return n < 10 ? '0' + n : n;
+        }
+
+        function getLocalDateString(d = new Date()) {
+            return `${d.getFullYear()}-${padZero(d.getMonth() + 1)}-${padZero(d.getDate())}`;
+        }
+
+        function getLocalTimeString(d = new Date()) {
+            return `${padZero(d.getHours())}:${padZero(d.getMinutes())}:${padZero(d.getSeconds())}`;
+        }
+
+        function formatDisplayTime(d = new Date()) {
+            let hours = d.getHours();
+            const minutes = padZero(d.getMinutes());
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; // 0 becomes 12
+            return `${padZero(hours)}:${minutes} ${ampm}`;
+        }
+
+        function formatDisplayDate(d = new Date()) {
+            return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        async function handleDecodedCode(decodedText) {
+            if (!isScanning) return;
+            isScanning = false;
+
+            const token = extractToken(decodedText);
+            if (!token) {
+                playScanBeep(false);
+                showInScannerResult({ success: false, message: 'Invalid QR code scanned.' });
+                return;
+            }
+
+            const statusText = document.getElementById('statusText');
+            statusText.innerText = 'Processing attendance...';
+
+            // If online, attempt live server check-in
+            if (navigator.onLine) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+                    const response = await fetch('ajax/checkin_ajax.php?token=' + encodeURIComponent(token), {
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        playScanBeep(data.success);
+                        showInScannerResult(data);
+
+                        // Trigger sync for any older pending scans
+                        syncPendingScans(false);
+                        return;
+                    }
+                } catch (err) {
+                    console.warn('Network check-in failed or timed out. Falling back to offline roster.', err);
+                }
+            }
+
+            // Fallback: 100% Offline Check-in Execution
+            handleOfflineCheckin(token);
+        }
+
+        function handleOfflineCheckin(token) {
+            const roster = getCachedRoster();
+            const settings = getCachedSettings();
+            const now = new Date();
+            const todayStr = getLocalDateString(now);
+            const timeStr = getLocalTimeString(now);
+            const displayTime = formatDisplayTime(now);
+            const displayDate = formatDisplayDate(now);
+
+            // 1. Locate staff in local roster
+            const staff = roster.find(s => s.qr_code === token);
+
+            if (!staff) {
+                playScanBeep(false);
+                showInScannerResult({
+                    success: false,
+                    message: 'Unrecognized QR code in offline roster. Connect to internet once to sync badges.'
+                });
+                return;
+            }
+
+            if (staff.status !== 'active') {
+                playScanBeep(false);
+                showInScannerResult({
+                    success: false,
+                    staff_name: staff.name,
+                    message: 'Staff account is currently paused.'
+                });
+                return;
+            }
+
+            // 2. Check if already marked today in local queue or cache
+            const pendingQueue = getPendingScans();
+            const alreadyInQueue = pendingQueue.find(q => q.token === token && q.date === todayStr);
+
+            let todayScannedIds = [];
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY_SCANNED_TODAY);
+                const parsed = stored ? JSON.parse(stored) : {};
+                if (parsed.date === todayStr) {
+                    todayScannedIds = parsed.ids || [];
+                }
+            } catch (e) {}
+
+            const isAlreadyMarked = alreadyInQueue || todayScannedIds.includes(staff.id);
+
+            // 3. Determine Shift Credit based on Cutoff Time (default 12:00:00)
+            const cutoff = settings.cutoff_time || '12:00:00';
+            const isFullDay = (timeStr <= cutoff);
+            const shiftStatus = isFullDay ? 'full_day' : 'half_day';
+
+            const avatarUrl = staff.profile_picture ? 'uploads/staff/' + staff.profile_picture : 'uploads/staff/default.png';
+
+            if (isAlreadyMarked) {
+                playScanBeep(true);
+                showInScannerResult({
+                    success: true,
+                    already_marked: true,
+                    is_offline: true,
+                    staff_name: staff.name,
+                    avatar: avatarUrl,
+                    status: shiftStatus,
+                    time: displayTime,
+                    date: displayDate,
+                    message: `${staff.name} is already recorded as Present for today (offline queued).`
+                });
+                return;
+            }
+
+            // 4. Save to pending offline scans queue
+            const newScan = {
+                token: token,
+                staff_id: staff.id,
+                staff_name: staff.name,
+                avatar: avatarUrl,
+                date: todayStr,
+                time: timeStr,
+                display_time: displayTime,
+                display_date: displayDate,
+                status: shiftStatus,
+                created_at: Date.now()
+            };
+
+            pendingQueue.push(newScan);
+            savePendingScans(pendingQueue);
+
+            // Record into today's scanned IDs
+            if (!todayScannedIds.includes(staff.id)) {
+                todayScannedIds.push(staff.id);
+            }
+            localStorage.setItem(STORAGE_KEY_SCANNED_TODAY, JSON.stringify({
+                date: todayStr,
+                ids: todayScannedIds
+            }));
+
+            // 5. Beep and display result
+            playScanBeep(true);
+            showInScannerResult({
+                success: true,
+                already_marked: false,
+                is_offline: true,
+                staff_name: staff.name,
+                avatar: avatarUrl,
+                status: shiftStatus,
+                time: displayTime,
+                date: displayDate,
+                message: `Attendance marked offline. Will auto-sync when online.`
+            });
+        }
+
+        // -------------------------------------------------------------
+        // 7. Visual Feedback Modal / In-Scanner Overlay
+        // -------------------------------------------------------------
+        function showInScannerResult(data) {
+            const overlay = document.getElementById('checkinOverlay');
+            const iconCircle = document.getElementById('overlayIconCircle');
+            const iconSuccess = document.getElementById('overlayIconSuccess');
+            const iconError = document.getElementById('overlayIconError');
+            const avatar = document.getElementById('overlayAvatar');
+            const title = document.getElementById('overlayTitle');
+            const msg = document.getElementById('overlayMsg');
+            const infoBox = document.getElementById('overlayInfoBox');
+            const statusBadge = document.getElementById('overlayStatusBadge');
+            const statusText = document.getElementById('overlayStatusText');
+            const shiftBadge = document.getElementById('overlayShiftBadge');
+            const timeDisplay = document.getElementById('overlayTimeDisplay');
+            const dateDisplay = document.getElementById('overlayDateDisplay');
+            const storageMode = document.getElementById('overlayStorageMode');
+
+            if (data.success) {
+                iconCircle.className = 'overlay-icon-circle success';
+                iconSuccess.style.display = 'block';
+                iconError.style.display = 'none';
+
+                if (data.already_marked) {
+                    title.textContent = 'Already Marked Present';
+                    msg.textContent = `${data.staff_name || 'Staff Member'} is already recorded as Present for today.`;
+                } else {
+                    title.textContent = data.is_offline ? 'Marked Present! (Offline)' : 'Marked Present!';
+                    msg.textContent = `Welcome, ${data.staff_name || 'Staff Member'}! Attendance recorded with time.`;
+                }
+
+                if (data.avatar) {
+                    avatar.src = data.avatar;
+                    avatar.style.display = 'block';
+                } else {
+                    avatar.style.display = 'none';
+                }
+
+                infoBox.style.display = 'flex';
+                const isFull = (data.status === 'full_day');
+                shiftBadge.className = `badge ${isFull ? 'badge-primary' : 'badge-warning'}`;
+                shiftBadge.textContent = isFull ? 'Full Day (100%)' : 'Half Day (50%)';
+
+                statusBadge.className = 'badge badge-success';
+                statusText.textContent = data.is_offline ? 'PRESENT • OFFLINE SAVED' : 'PRESENT';
+
+                timeDisplay.innerHTML = `<svg class="svg-icon"><use href="#icon-clock"></use></svg> ${data.time || ''}`;
+                dateDisplay.textContent = data.date || '';
+
+                if (data.is_offline) {
+                    storageMode.style.display = 'block';
+                } else {
+                    storageMode.style.display = 'none';
+                }
+            } else {
+                iconCircle.className = 'overlay-icon-circle error';
+                iconSuccess.style.display = 'none';
+                iconError.style.display = 'block';
+                title.textContent = data.staff_name ? data.staff_name : 'Check-In Rejected';
+                msg.textContent = data.message || 'Invalid or expired QR code';
+                if (data.avatar) {
+                    avatar.src = data.avatar;
+                    avatar.style.display = 'block';
+                } else {
+                    avatar.style.display = 'none';
+                }
+                infoBox.style.display = 'none';
+            }
+
+            overlay.style.display = 'flex';
+
+            // Auto resume in 3.5 seconds
+            clearTimeout(autoResumeTimer);
+            autoResumeTimer = setTimeout(resumeScanningNow, 3500);
+        }
+
+        function resumeScanningNow() {
+            clearTimeout(autoResumeTimer);
+            const overlay = document.getElementById('checkinOverlay');
+            overlay.style.display = 'none';
+
+            const statusText = document.getElementById('statusText');
+            statusText.innerText = 'Ready • Point camera at QR badge';
+
+            // Small delay to prevent instant re-trigger
+            setTimeout(() => {
+                isScanning = true;
+            }, 400);
+        }
+
+        // -------------------------------------------------------------
+        // 8. Camera Initialization (HTML5 QR Code)
+        // -------------------------------------------------------------
+        function startScanner() {
+            if (html5QrCode && isScanning) {
+                html5QrCode.stop().then(() => startNewScanner()).catch(err => console.warn(err));
+            } else {
+                startNewScanner();
+            }
+        }
+
+        function startNewScanner() {
+            const statusText = document.getElementById('statusText');
+            statusText.innerText = 'Starting camera...';
+
+            html5QrCode = new Html5Qrcode("qr-reader");
+            const config = { fps: 12, qrbox: { width: 280, height: 280 } };
+
+            html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                (decodedText) => {
+                    handleDecodedCode(decodedText);
+                },
+                (errorMessage) => { /* scanning */ }
+            ).then(() => {
+                isScanning = true;
+                statusText.innerText = 'Ready • Point camera at QR badge';
+            }).catch(err => {
+                console.error(err);
+                statusText.innerText = '❌ Camera access error. Grant permission.';
+            });
+        }
+
+        // -------------------------------------------------------------
+        // 9. QR Image File Scan Fallback
+        // -------------------------------------------------------------
+        const qrFileInput = document.getElementById('qrFileInput');
+        if (qrFileInput) {
+            qrFileInput.addEventListener('change', async function(e) {
+                if (!e.target.files || e.target.files.length === 0) return;
+                const file = e.target.files[0];
+                const statusText = document.getElementById('statusText');
+                statusText.innerText = 'Scanning uploaded image...';
+                try {
+                    if (!html5QrCode) {
+                        html5QrCode = new Html5Qrcode("qr-reader");
+                    }
+                    const decodedText = await html5QrCode.scanFile(file, true);
+                    handleDecodedCode(decodedText);
+                } catch (err) {
+                    playScanBeep(false);
+                    showInScannerResult({
+                        success: false,
+                        message: 'Could not detect a valid QR code in this image.'
+                    });
+                } finally {
+                    e.target.value = '';
+                }
+            });
+        }
+
+        document.getElementById('restartBtn').addEventListener('click', startScanner);
+
+        // -------------------------------------------------------------
+        // 10. Event Listeners: Online / Offline Handlers & Periodic Sync
+        // -------------------------------------------------------------
+        window.addEventListener('online', () => {
+            updateNetworkStatusUI();
+            showToast('Device is back online! Syncing scans...');
+            syncPendingScans(false);
+            fetchStaffRoster();
+        });
+
+        window.addEventListener('offline', () => {
+            updateNetworkStatusUI();
+            showToast('Device is offline. Scans will be stored locally.', true);
+        });
+
+        // Periodic sync attempt every 20 seconds if online
+        setInterval(() => {
+            if (navigator.onLine && getPendingScans().length > 0 && !isSyncing) {
+                syncPendingScans(false);
+            }
+        }, 20000);
+
+        // Initialization
+        updateNetworkStatusUI();
+        fetchStaffRoster();
+        startScanner();
+    </script>
 </body>
 </html>
